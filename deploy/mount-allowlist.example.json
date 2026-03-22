@@ -1,0 +1,7 @@
+{
+  "paths": [
+    "/workspace",
+    "/allowed/project-a",
+    "/allowed/shared-docs"
+  ]
+}

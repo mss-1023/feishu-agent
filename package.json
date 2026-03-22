@@ -1,0 +1,35 @@
+{
+  "name": "feishu-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.81",
+    "@anthropic-ai/sdk": "^0.80.0",
+    "@larksuiteoapi/node-sdk": "^1.59.0",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "nacos": "^2.6.1",
+    "pino": "^10.1.0",
+    "pino-pretty": "^13.1.2",
+    "yaml": "^2.8.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.7.2",
+    "fast-check": "^4.6.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.1"
+  }
+}

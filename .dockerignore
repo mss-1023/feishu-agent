@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+*.egg-info
+node_modules
+dist
+
+# Secrets / local config (never bake into image)
+.env
+.env.local
+*.env
+
+# Runtime state (mounted as volumes)
+workspace/
+uploads/
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
+.idea
+.vscode
+
+# Logs
+*.log

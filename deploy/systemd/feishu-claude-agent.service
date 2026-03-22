@@ -1,0 +1,14 @@
+[Unit]
+Description=Feishu Claude Agent TS Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/ai-container
+ExecStart=/usr/bin/env npm start
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target
