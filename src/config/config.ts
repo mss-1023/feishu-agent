@@ -61,6 +61,10 @@ const configSchema = z.object({
     (val) => (typeof val === 'string' ? val.split(',').map((s: string) => s.trim()).filter(Boolean) : val),
     z.array(z.string()).default([]),
   ),
+  errorReportEnabled: z.boolean().default(true),
+  errorReportHour: z.coerce.number().default(18),
+  errorReportMinute: z.coerce.number().default(0),
+  errorReportChatId: z.string().default(''),
 });
 
 export const settings = configSchema.parse({
@@ -116,6 +120,10 @@ export const settings = configSchema.parse({
     .split(',')
     .map((s: string) => s.trim())
     .filter(Boolean),
+  errorReportEnabled: parseBoolean(getValue('ERROR_REPORT_ENABLED', 'true', nacosConfig), true),
+  errorReportHour: getValue('ERROR_REPORT_HOUR', '18', nacosConfig),
+  errorReportMinute: getValue('ERROR_REPORT_MINUTE', '0', nacosConfig),
+  errorReportChatId: getValue('ERROR_REPORT_CHAT_ID', '', nacosConfig),
 });
 
 /**

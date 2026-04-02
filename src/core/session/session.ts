@@ -16,6 +16,7 @@ import { createWindowsClaudeSpawner } from './claude-spawner.js';
 import type { PersistedSession } from '../../types.js';
 import {
   buildStreamingCard,
+  buildThinkingCard,
 } from '../../feishu/cards.js';
 import type { FeishuSender } from '../../feishu/sender.js';
 import { StreamParser } from '../runtime/stream-parser.js';
@@ -46,7 +47,7 @@ function summarizeLogText(text: string, maxLength: number = CONSTANTS.LOG_SUMMAR
 export class ClaudeSession {
   readonly sessionKey: string;
   readonly localSessionId: string;
-  readonly claudeSessionId: string;
+  private _claudeSessionId: string;
   readonly workspaceDir: string;
 
   private readonly sender: FeishuSender;
@@ -55,6 +56,10 @@ export class ClaudeSession {
   private readonly permissionManager: PermissionManager;
   private readonly streamHandler: StreamHandler;
   private processing = false;
+
+  get claudeSessionId(): string {
+    return this._claudeSessionId;
+  }
 
   /** Whether this session is currently processing its queue */
   get isProcessing(): boolean {
@@ -83,7 +88,7 @@ export class ClaudeSession {
     this.sender = input.sender;
     this.replyTarget = input.replyTarget;
     this.localSessionId = input.persisted?.localSessionId || randomUUID();
-    this.claudeSessionId = input.persisted?.claudeSessionId || randomUUID();
+    this._claudeSessionId = input.persisted?.claudeSessionId || randomUUID();
     this.workspaceDir =
       input.persisted?.workspaceDir ||
       input.workspaceDir ||
@@ -230,19 +235,28 @@ export class ClaudeSession {
     // Reset stream handler for this message
     this.streamHandler.reset();
 
-    // Add a "Typing" emoji reaction to indicate thinking (like Claude's typing indicator)
-    let typingReactionId: string | null = null;
+    // Send a "thinking" card to indicate processing
+    let thinkingCardMessageId: string | null = null;
     if (item.rootMessageId) {
-      typingReactionId = await this.sender.addReaction(item.rootMessageId, 'Typing');
+      thinkingCardMessageId = await this.sender.replyCard(
+        item.rootMessageId,
+        buildThinkingCard(),
+        item.replyInThread,
+      );
+    } else {
+      thinkingCardMessageId = await this.sender.sendCard(
+        this.replyTarget(),
+        buildThinkingCard(),
+      );
     }
 
     logger.info(
       {
         sessionKey: this.sessionKey,
         rootMessageId: item.rootMessageId || null,
-        typingReactionId,
+        thinkingCardMessageId,
       },
-      'typing reaction added',
+      'thinking card sent',
     );
 
     let errorMessage = '';
@@ -356,15 +370,49 @@ export class ClaudeSession {
         { sessionKey: this.sessionKey, claudeQueryLatencyMs: Date.now() - queryStart },
         'claude query completed',
       );
+
     } catch (error) {
       const rawErrorMessage = error instanceof Error ? error.message : String(error);
       const trimmedStderr = stderrBuffer.trim();
+
+      // 服务重启后 resume 失败：会话在 Claude Code 侧已不存在，重置并用新会话重试
+      const conversationNotFound =
+        this.hasHistory &&
+        (rawErrorMessage.includes('No conversation found with session ID') ||
+         errorMessage.includes('No conversation found with session ID'));
+      if (conversationNotFound) {
+        logger.warn(
+          {
+            sessionKey: this.sessionKey,
+            claudeSessionId: this.claudeSessionId,
+          },
+          'conversation not found after restart, resetting session and retrying as new',
+        );
+        this.hasHistory = false;
+        this._claudeSessionId = randomUUID();
+        stderrBuffer = '';
+        errorMessage = '';
+        sawTextDelta = false;
+        this.streamHandler.reset();
+        try {
+          const retryStart = Date.now();
+          await runAgentQuery(false);
+          logger.info(
+            { sessionKey: this.sessionKey, claudeQueryLatencyMs: Date.now() - retryStart },
+            'claude query retry (new session) completed',
+          );
+        } catch (retryError) {
+          errorMessage = retryError instanceof Error ? retryError.message : String(retryError);
+          logger.error({ error: retryError, sessionKey: this.sessionKey }, 'agent query retry (new session) failed');
+        }
+      }
+
       const sessionInUse =
         !this.hasHistory &&
         rawErrorMessage.includes('Claude Code process exited with code 1') &&
         trimmedStderr.includes('is already in use');
 
-      if (sessionInUse) {
+      if (!conversationNotFound && sessionInUse) {
         logger.warn(
           {
             sessionKey: this.sessionKey,
@@ -398,7 +446,7 @@ export class ClaudeSession {
           }
           logger.error({ error: retryError, sessionKey: this.sessionKey }, 'agent query retry failed');
         }
-      } else {
+      } else if (!conversationNotFound) {
         errorMessage = rawErrorMessage;
         if (trimmedStderr) {
           logger.error(
@@ -415,15 +463,12 @@ export class ClaudeSession {
 
     const messageLatencyMs = Date.now() - item.enqueuedAt;
 
-    // Remove the typing reaction
-    if (typingReactionId && item.rootMessageId) {
-      await this.sender.deleteReaction(item.rootMessageId, typingReactionId);
-    }
-
     if (errorMessage) {
-      // Send error as a card reply
+      // Update thinking card to error, or send new error card
       const errorCard = buildStreamingCard(errorMessage, 'error');
-      if (item.rootMessageId) {
+      if (thinkingCardMessageId) {
+        await this.sender.updateCard(thinkingCardMessageId, errorCard);
+      } else if (item.rootMessageId) {
         await this.sender.replyCard(item.rootMessageId, errorCard, item.replyInThread);
       } else {
         await this.sender.sendCard(this.replyTarget(), errorCard);
@@ -439,9 +484,11 @@ export class ClaudeSession {
       );
     } else {
       const buffer = this.streamHandler.getBuffer();
-      // Send completed result as a card reply
+      // Update thinking card to completed result, or send new card
       const completeCard = buildStreamingCard(buffer, 'complete');
-      if (item.rootMessageId) {
+      if (thinkingCardMessageId) {
+        await this.sender.updateCard(thinkingCardMessageId, completeCard);
+      } else if (item.rootMessageId) {
         await this.sender.replyCard(item.rootMessageId, completeCard, item.replyInThread);
       } else {
         await this.sender.sendCard(this.replyTarget(), completeCard);

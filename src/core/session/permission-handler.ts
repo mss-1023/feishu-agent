@@ -16,6 +16,10 @@ export const AUTO_ALLOW_TOOLS = new Set([
   'WebFetch',
   'Skill',
   'TodoWrite',
+  'Bash',
+  'Edit',
+  'Write',
+  'NotebookEdit',
 ]);
 
 export const BOUNDARY_AUTO_ALLOW_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS']);

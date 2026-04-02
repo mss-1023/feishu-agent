@@ -21,6 +21,7 @@ import {
   syncProjectClaudeRuntime,
 } from './core/runtime/claude-runtime.js';
 import { startDailyPushScheduler, executeDailyPush } from './core/daily-push.js';
+import { startErrorReportScheduler, executeDailyErrorReport } from './core/log-monitor.js';
 
 const client = createFeishuClient();
 const sender = new FeishuSender(client);
@@ -35,9 +36,21 @@ subscribeNacosConfig(props, hasEnvLocal, applyHotReload).catch((error) => {
 
 let shuttingDown = false;
 let stopDailyPush: (() => void) | null = null;
+let stopErrorReport: (() => void) | null = null;
 
 if (settings.pushEnabled) {
   stopDailyPush = startDailyPushScheduler(sender);
+}
+
+if (settings.errorReportEnabled && settings.errorReportChatId) {
+  const logPath = '/Users/shaoshuaima/logs/feishu-agent.log';
+  stopErrorReport = startErrorReportScheduler(
+    sender,
+    logPath,
+    settings.errorReportChatId,
+    settings.errorReportHour,
+    settings.errorReportMinute,
+  );
 }
 
 logger.info(
@@ -70,6 +83,11 @@ const eventDispatcher = new lark.EventDispatcher({
     await handleIncomingMessage(data, sessionManager, sender);
   },
   'im.message.message_read_v1': async () => {},
+  // WebSocket 模式下卡片回调也通过 eventDispatcher 分发
+  'card.action.trigger': async (data: any) => {
+    logger.info({ action: data?.action }, 'card action received via eventDispatcher');
+    return handleCardAction(data, sessionManager);
+  },
 });
 
 const cardDispatcher = new lark.CardActionHandler(
@@ -98,6 +116,19 @@ app.use('/card', lark.adaptExpress(cardDispatcher));
 app.post('/push/test', async (_req, res) => {
   try {
     await executeDailyPush(sender);
+    res.json({ status: 'ok' });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: String(error) });
+  }
+});
+app.post('/error-report/test', async (_req, res) => {
+  try {
+    const logPath = '/Users/shaoshuaima/logs/feishu-agent.log';
+    if (!settings.errorReportChatId) {
+      res.status(400).json({ status: 'error', message: 'ERROR_REPORT_CHAT_ID not configured' });
+      return;
+    }
+    await executeDailyErrorReport(sender, logPath, settings.errorReportChatId);
     res.json({ status: 'ok' });
   } catch (error) {
     res.status(500).json({ status: 'error', message: String(error) });
@@ -145,6 +176,7 @@ async function shutdown(signal: string) {
 
   // 3.5. Stop daily push scheduler
   stopDailyPush?.();
+  stopErrorReport?.();
 
   // 4. Wait for all processQueue() to complete, max shutdownTimeoutMs
   const allIdle = await sessionManager.waitForIdle(SHUTDOWN_TIMEOUT_MS);

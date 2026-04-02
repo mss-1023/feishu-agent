@@ -1,0 +1,40 @@
+# Node.js
+node_modules/
+dist/
+
+# Environment (contains secrets)
+.env
+.env.local
+.env.backup
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+*.swp
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Test coverage
+coverage/
+
+# Runtime data
+workspace/
+
+# Kiro IDE
+.kiro/
+
+# SQLite
+*.db
+*.db-wal
+*.db-shm
+
+# Claude
+.claude/
+
+# LaunchAgent plist (contains paths)
+*.plist

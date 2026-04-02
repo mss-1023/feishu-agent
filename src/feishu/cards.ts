@@ -31,14 +31,26 @@ function markdown(content: string) {
   };
 }
 
+export function buildThinkingCard(): InteractiveCard {
+  return {
+    config: {
+      wide_screen_mode: true,
+    },
+    header: header('🤔 思考中...', 'blue'),
+    elements: [
+      markdown('正在分析你的问题...'),
+    ],
+  };
+}
+
 export function buildStreamingCard(
   content: string,
   status: 'complete' | 'error',
 ): InteractiveCard {
   const normalized = truncateContent(content, CONSTANTS.STREAM_CARD_TRUNCATE_LENGTH);
   const headerByStatus = {
-    complete: header('SAT-View', 'green'),
-    error: header('Error', 'red'),
+    complete: header('🤖 Agent', 'green'),
+    error: header('❌ 错误', 'red'),
   };
 
   return {
@@ -48,7 +60,7 @@ export function buildStreamingCard(
     header: headerByStatus[status],
     elements: [
       markdown(
-        normalized || (status === 'error' ? 'Request failed.' : 'No content.'),
+        normalized || (status === 'error' ? '请求处理失败。' : '无内容。'),
       ),
     ],
   };
@@ -63,7 +75,7 @@ export function buildToolUseCard(input: {
     config: {
       wide_screen_mode: true,
     },
-    header: header(`Tool call: ${input.toolName}`, 'orange'),
+    header: header(`🛠️ 工具调用: ${input.toolName}`, 'orange'),
     elements: [markdown(`\`\`\`json\n${body}\n\`\`\``)],
   };
 }
@@ -81,11 +93,11 @@ export function buildPermissionCard(input: {
     config: {
       wide_screen_mode: true,
     },
-    header: header(`Permission request: ${input.toolName}`, 'red'),
+    header: header(`⚠️ 权限请求: ${input.toolName}`, 'red'),
     elements: [
       markdown(
         [
-          input.title || 'Claude wants to use a tool.',
+          input.title || 'Claude 请求使用工具。',
           input.description || '',
           '```json',
           toolBody,
@@ -100,7 +112,7 @@ export function buildPermissionCard(input: {
           {
             tag: 'button',
             type: 'primary',
-            text: { tag: 'plain_text', content: 'Approve' },
+            text: { tag: 'plain_text', content: '✅ 批准' },
             value: {
               action_type: 'permission_approve',
               session_key: input.sessionKey,
@@ -110,7 +122,7 @@ export function buildPermissionCard(input: {
           {
             tag: 'button',
             type: 'danger',
-            text: { tag: 'plain_text', content: 'Deny' },
+            text: { tag: 'plain_text', content: '❌ 拒绝' },
             value: {
               action_type: 'permission_deny',
               session_key: input.sessionKey,
@@ -120,7 +132,7 @@ export function buildPermissionCard(input: {
           {
             tag: 'button',
             type: 'default',
-            text: { tag: 'plain_text', content: 'Allow safe ops for 10m' },
+            text: { tag: 'plain_text', content: '🔓 安全操作自动放行 10 分钟' },
             value: {
               action_type: 'permission_skip_10min',
               session_key: input.sessionKey,
@@ -148,12 +160,12 @@ export function buildPermissionResolvedCard(input: {
       wide_screen_mode: true,
     },
     header: header(
-      `${approved ? 'Approved' : 'Denied'}: ${input.toolName}`,
+      `${approved ? '✅ 已批准' : '🚫 已拒绝'}: ${input.toolName}`,
       approved ? 'green' : 'grey',
     ),
     elements: [
       markdown(
-        `${actor} ${approved ? 'approved' : 'denied'} this action.\n\`\`\`json\n${body}\n\`\`\``,
+        `${actor} ${approved ? '批准' : '拒绝'}了此操作。\n\`\`\`json\n${body}\n\`\`\``,
       ),
     ],
   };
