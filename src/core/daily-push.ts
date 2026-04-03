@@ -58,30 +58,41 @@ function getTodayTopic(): string {
 
 /** 调用 Claude API 生成学习内容 */
 async function generateContent(topic: string): Promise<string> {
-  const opts: Record<string, unknown> = {};
-  if (process.env.ANTHROPIC_BASE_URL) {
-    opts.baseURL = process.env.ANTHROPIC_BASE_URL;
-  }
-  if (process.env.ANTHROPIC_AUTH_TOKEN) {
-    opts.apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
+  const baseURL = process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
+  const apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
+
+  if (!apiKey) {
+    throw new Error('ANTHROPIC_AUTH_TOKEN not configured');
   }
 
-  const client = new Anthropic(opts as any);
   const model = process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL || 'claude-haiku-4-5-20251001';
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: 1024,
-    messages: [
-      {
-        role: 'user',
-        content: `请用通俗易懂的方式讲解：${topic}\n\n要求：\n1. 先用1句话说清楚是什么\n2. 用3-5个要点解释核心原理\n3. 举一个实际应用例子\n4. 最后给一个进一步学习的建议\n\n控制在 400 字以内，适合每日学习。用中文回答。`,
-      },
-    ],
+  const response = await fetch(`${baseURL}/v1/messages`, {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1024,
+      messages: [
+        {
+          role: 'user',
+          content: `请用通俗易懂的方式讲解：${topic}\n\n要求：\n1. 先用1句话说清楚是什么\n2. 用3-5个要点解释核心原理\n3. 举一个实际应用例子\n4. 最后给一个进一步学习的建议\n\n控制在 400 字以内，适合每日学习。用中文回答。`,
+        },
+      ],
+    }),
   });
 
-  const textBlock = response.content.find((b) => b.type === 'text');
-  return textBlock ? (textBlock as any).text : '';
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.status} ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const textBlock = data.content?.find((b: any) => b.type === 'text');
+  return textBlock ? textBlock.text : '';
 }
 
 /** 格式化日期 YYYY-MM-DD */
